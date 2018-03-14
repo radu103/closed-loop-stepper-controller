@@ -1,9 +1,8 @@
-
+// for SparkFun SAMD21 Mini Breakout board with Pololu DRV8825 stepper driver
 const int CW = 0;
 const int CCW = 1;
-
-int stepPin = 2;
-int dirPin = 3;
+const int stepPin = 2;
+const int dirPin = 3;
 
 int stepCount = 0;
 int dir = CW;
