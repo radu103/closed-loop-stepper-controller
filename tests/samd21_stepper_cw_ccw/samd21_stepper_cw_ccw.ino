@@ -133,13 +133,13 @@ void loop(){
     }
 
     if(dir == 0){
-      stepLeft(STEP_PIN, 1, STEP_DIVIDE_32, STEP_MICROSECONDS_DELAY);
+      stepLeft(STEP_PIN, 1, STEP_FULL, STEP_MICROSECONDS_DELAY);
     }
     else
     {
-      stepRight(STEP_PIN, 1, STEP_DIVIDE_32, STEP_MICROSECONDS_DELAY);
+      stepRight(STEP_PIN, 1, STEP_FULL, STEP_MICROSECONDS_DELAY);
     }
     
     stepCount++;
-    delay(1);
+    delay(100);
 }
