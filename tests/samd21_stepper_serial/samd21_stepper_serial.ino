@@ -1,4 +1,6 @@
 // for SparkFun SAMD21 Mini Breakout board with Pololu DRV8825 stepper driver
+const bool DEBUG_MODE = true;
+
 const int CW = 0;
 const int CCW = 1;
 
@@ -17,7 +19,7 @@ const int STEP_DIVIDE_32 = 32;
 const int DO_STEP_MICROSECONDS_DELAY = 50;
 const int BETWEEN_STEP_MICROSECONDS_DELAY = 500;
 
-const int STEP_PER_REVOLUTION = 200;           // for 1.8 deg stepper motor
+const int STEPS_PER_REVOLUTION = 200;           // for 1.8 deg stepper motor
 const int DEG_ERROR_RANGE = 0.25;              // encoder accuracy
 const int DEFAULT_BAUD_RATE = 115200;          // default serial baud rate
 
@@ -25,6 +27,7 @@ int originPositionDeg = 0;                     // start from zero
 int originPositionMicrosteps32 = 0;            // transformed from origin deg as it should be 
 int feedbackPositionDeg = 0;                   // read from the encoder
 int feedbackPositionMicrosteps32 = 0;          // transformed from encoder read
+int motorTemp = 0;                             // motor sensor temp
 
 int totalStepCount = 0;
 int dir = CW;
@@ -48,10 +51,7 @@ void setup() {
 
   // default baud rate
   SerialUSB.begin(DEFAULT_BAUD_RATE);
-  
   while(!SerialUSB) ; // Wait for Serial monitor to open
-
-  SerialUSB.println("SETUP OK");
 }
 
 // set origin o current position
@@ -60,6 +60,16 @@ void resetOrigin(){
   originPositionMicrosteps32 = 0;
   feedbackPositionDeg = 0;
   feedbackPositionMicrosteps32 = 0;
+}
+
+void getStatus(){
+  String stat = "";
+  stat = stat + "{deg:";
+  stat = stat + originPositionDeg;
+  stat = stat + ",microsteps32:";
+  stat = stat + originPositionMicrosteps32;
+  stat = stat + "}";
+  SerialUSB.println(stat);
 }
 
 // change direction pin output value
@@ -151,29 +161,9 @@ void stepLeft(int stepPin, int steps, int size, int microseconds, int after_step
 // main program loop
 void loop(){
 
-  SerialUSB.println("START");
+  SerialUSB.println("{status:'ONLINE'}");
 
-  stepLeft(STEP_PIN, 200, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-  
-  stepLeft(STEP_PIN, 200, STEP_DIVIDE_2, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-  
-  stepLeft(STEP_PIN, 200, STEP_DIVIDE_4, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-  
-  stepLeft(STEP_PIN, 200, STEP_DIVIDE_8, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-  
-  stepLeft(STEP_PIN, 200, STEP_DIVIDE_16, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-  
-  stepLeft(STEP_PIN, 200, STEP_DIVIDE_32, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-  delay(1000);
-
-  SerialUSB.println("END");
-
-  // forever now read serial command and execute it
+  // forever read serial command and execute it
   while(true){
 
     String command = ""; // Create a new string
@@ -182,18 +172,67 @@ void loop(){
       command += (char)SerialUSB.read();
     }
 
-    if(command.length() > 0){
-      SerialUSB.println("COMMAND IS : " + command);
-    
-      if(command[0] == 'L'){
-          stepLeft(STEP_PIN, 200, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
-          delay(1000);
+    // COMMAND SHOULD BE OF STRING TEMPLATE explained below
+    // L360.53 = Left 360.53 degrees
+    // L36000.76 = Left 360 * 100 degrees + 0.76 deg
+    // R360 = Right 360 deg
+
+    command.trim();
+
+    int len = command.length();
+    if(len > 0){
+
+      // echo back the command to confirm receive
+      if(DEBUG_MODE){
+        String resp = "{";
+        resp = resp + "command:'";
+        resp = resp + command;
+        resp = resp + "'}";
+        SerialUSB.println(resp);
       }
-    
-      if(command[0] == 'R'){
-          stepRight(STEP_PIN, 200, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+
+      if(command.equalsIgnoreCase("STATUS")){
+         getStatus();
+      }
+      
+      if(command.equalsIgnoreCase("ORIGIN")){
+         resetOrigin();
+         getStatus();
+      }
+
+      // move CCW
+      if(command[0] == 'L' || command[0] == 'l'){
+
+          // no of degrees to move
+          double deg = command.substring(1).toDouble();
+
+          int full = (int)(deg / (360 / STEPS_PER_REVOLUTION));
+          stepLeft(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+
+          // update status vars
+          originPositionDeg -= deg;
+          originPositionMicrosteps32 = originPositionDeg * 32; 
+          
+          // confirm move with new status response
+          getStatus();
+      }
+
+      // move CW
+      if(command[0] == 'R' || command[0] == 'r'){
+
+          // no of degrees to move
+          double deg = command.substring(1).toDouble();
+
+          int full = (int)(deg / (360 / STEPS_PER_REVOLUTION));
+          stepRight(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+
+          // update status vars
+          originPositionDeg += deg;
+          originPositionMicrosteps32 = originPositionDeg * 32; 
+          
+          // confirm move with new status response
+          getStatus();
       }
     }
- 
   }
 }
