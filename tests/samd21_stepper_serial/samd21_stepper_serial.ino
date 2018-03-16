@@ -1,5 +1,5 @@
 // for SparkFun SAMD21 Mini Breakout board with Pololu DRV8825 stepper driver
-const bool DEBUG_MODE = true;
+bool DEBUG_MODE = true;
 
 const int CW = 0;
 const int CCW = 1;
@@ -28,9 +28,8 @@ int originPositionMicrosteps32 = 0;            // transformed from origin deg as
 int feedbackPositionDeg = 0;                   // read from the encoder
 int feedbackPositionMicrosteps32 = 0;          // transformed from encoder read
 int motorTemp = 0;                             // motor sensor temp
-
-int totalStepCount = 0;
 int dir = CW;
+int stepSize = STEP_FULL;
 
 // one time setup ops for program
 void setup() {
@@ -68,20 +67,32 @@ void getStatus(){
   stat = stat + originPositionDeg;
   stat = stat + ",microsteps32:";
   stat = stat + originPositionMicrosteps32;
+  stat = stat + ",debug:";
+  stat = stat + DEBUG_MODE;
   stat = stat + "}";
   SerialUSB.println(stat);
 }
 
-// change direction pin output value
-void setDir(int dir){
+void noDebug(){
+  DEBUG_MODE = false;
+}
 
-  if(dir == CW){
+void debug(){
+  DEBUG_MODE = true;
+}
+
+// change direction pin output value
+void setDir(int d){
+
+  if(d == CW){
     digitalWrite(DIR_PIN, LOW);
   }
   else
   {
     digitalWrite(DIR_PIN, HIGH);
   }
+
+  dir = d;
 }
 
 // change step size output values on control pins
@@ -122,6 +133,8 @@ void setStepSize(int size){
     digitalWrite(SIZE_PIN_1, HIGH);
     digitalWrite(SIZE_PIN_2, HIGH);
   }
+
+  stepSize = size;
 }
 
 // do step as it is defined by control pins outputs
@@ -137,8 +150,13 @@ void doStep(int pin, int microseconds){
 // do multiple steps CW
 void stepRight(int stepPin, int steps, int size, int microseconds, int after_step_microseconds){
 
-    setDir(CCW);
-    setStepSize(size);
+    if(dir != CCW){
+      setDir(CCW);
+    }
+
+    if(stepSize != size){
+      setStepSize(size);
+    }
     
     for (int s = 0; s < steps; s++) {
       doStep(stepPin, microseconds);
@@ -149,8 +167,13 @@ void stepRight(int stepPin, int steps, int size, int microseconds, int after_ste
 // do multiple steps CCW
 void stepLeft(int stepPin, int steps, int size, int microseconds, int after_step_microseconds){
 
-    setDir(CW);
-    setStepSize(size);
+    if(dir != CW){
+      setDir(CW);
+    }
+
+    if(stepSize != size){
+      setStepSize(size);
+    }
 
     for (int s = 0; s < steps; s++) {
       doStep(stepPin, microseconds);
@@ -200,13 +223,26 @@ void loop(){
          getStatus();
       }
 
+      if(command.equalsIgnoreCase("DEBUG")){
+        debug();
+        getStatus();
+      }
+
+      if(command.equalsIgnoreCase("NODEBUG")){
+        noDebug();
+        getStatus();
+      }
+
+      char c0 = command[0];
+
       // move CCW
-      if(command[0] == 'L' || command[0] == 'l'){
+      if(c0 == 'L' || c0 == 'l'){
 
           // no of degrees to move
           double deg = command.substring(1).toDouble();
 
-          int full = (int)(deg / (360 / STEPS_PER_REVOLUTION));
+          int full = (int)(deg * 1.0 / (360.00 / STEPS_PER_REVOLUTION));
+          SerialUSB.println(full);
           stepLeft(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
 
           // update status vars
@@ -218,12 +254,13 @@ void loop(){
       }
 
       // move CW
-      if(command[0] == 'R' || command[0] == 'r'){
+      if(c0 == 'R' || c0 == 'r'){
 
           // no of degrees to move
           double deg = command.substring(1).toDouble();
 
-          int full = (int)(deg / (360 / STEPS_PER_REVOLUTION));
+          int full = (int)(deg * 1.0 / (360.00 / STEPS_PER_REVOLUTION));
+          SerialUSB.println(full);
           stepRight(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
 
           // update status vars
