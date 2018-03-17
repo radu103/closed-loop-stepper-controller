@@ -23,8 +23,8 @@ const int STEPS_PER_REVOLUTION = 200;           // for 1.8 deg stepper motor
 const int DEG_ERROR_RANGE = 0.25;              // encoder accuracy
 const int DEFAULT_BAUD_RATE = 115200;          // default serial baud rate
 
-int originPositionDeg = 0;                     // start from zero
-int originPositionMicrosteps32 = 0;            // transformed from origin deg as it should be 
+int currentPositionDeg = 0;                     // start from zero
+int currentPositionMicrosteps32 = 0;            // transformed from origin deg as it should be 
 int feedbackPositionDeg = 0;                   // read from the encoder
 int feedbackPositionMicrosteps32 = 0;          // transformed from encoder read
 int motorTemp = 0;                             // motor sensor temp
@@ -55,8 +55,8 @@ void setup() {
 
 // set origin o current position
 void resetOrigin(){
-  originPositionDeg = 0;
-  originPositionMicrosteps32 = 0;
+  currentPositionDeg = 0;
+  currentPositionMicrosteps32 = 0;
   feedbackPositionDeg = 0;
   feedbackPositionMicrosteps32 = 0;
 }
@@ -64,9 +64,9 @@ void resetOrigin(){
 void getStatus(){
   String stat = "";
   stat = stat + "{deg:";
-  stat = stat + originPositionDeg;
+  stat = stat + currentPositionDeg;
   stat = stat + ",microsteps32:";
-  stat = stat + originPositionMicrosteps32;
+  stat = stat + currentPositionMicrosteps32;
   stat = stat + ",debug:";
   stat = stat + DEBUG_MODE;
   stat = stat + "}";
@@ -153,15 +153,15 @@ void stepRight(int stepPin, int steps, int size, int microseconds, int after_ste
     if(dir != CCW){
       setDir(CCW);
     }
-
-    if(stepSize != size){
-      setStepSize(size);
-    }
     
-    for (int s = 0; s < steps; s++) {
+    setStepSize(size);
+    
+    for (int s = 0; s <= steps; s++) {
       doStep(stepPin, microseconds);
       delayMicroseconds(after_step_microseconds);
     }
+
+    setStepSize(STEP_FULL);
 }
 
 // do multiple steps CCW
@@ -171,14 +171,14 @@ void stepLeft(int stepPin, int steps, int size, int microseconds, int after_step
       setDir(CW);
     }
 
-    if(stepSize != size){
-      setStepSize(size);
-    }
+    setStepSize(size);
 
-    for (int s = 0; s < steps; s++) {
+    for (int s = 0; s <= steps; s++) {
       doStep(stepPin, microseconds);
       delayMicroseconds(after_step_microseconds);   
     }
+
+    setStepSize(STEP_FULL);
 }
 
 // main program loop
@@ -242,12 +242,41 @@ void loop(){
           double deg = command.substring(1).toDouble();
 
           int full = (int)(deg * 1.0 / (360.00 / STEPS_PER_REVOLUTION));
-          SerialUSB.println(full);
-          stepLeft(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          
+          if(full > 0){
+            stepLeft(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          }
+
+          double degLeft = deg - (full * (360.00 / STEPS_PER_REVOLUTION));
+          
+          if(degLeft >= 360.00 / STEPS_PER_REVOLUTION / 2.0){
+              stepLeft(STEP_PIN, 1, STEP_DIVIDE_2, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degLeft = degLeft - 360.00 / STEPS_PER_REVOLUTION / 2.0;
+          }
+          
+          if(degLeft >= 360.00 / STEPS_PER_REVOLUTION / 4.0){
+              stepLeft(STEP_PIN, 1, STEP_DIVIDE_4, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degLeft = degLeft - 360.00 / STEPS_PER_REVOLUTION / 4.0;
+          }
+          
+          if(degLeft >= 360.00 / STEPS_PER_REVOLUTION / 8.0){
+              stepLeft(STEP_PIN, 1, STEP_DIVIDE_8, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degLeft = degLeft - 360.00 / STEPS_PER_REVOLUTION / 8.0;
+          }
+          
+          if(degLeft >= 360.00 / STEPS_PER_REVOLUTION / 16.0){
+              stepLeft(STEP_PIN, 1, STEP_DIVIDE_16, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degLeft = degLeft - 360.00 / STEPS_PER_REVOLUTION / 16.0;
+          }
+          
+          if(degLeft >= 360.00 / STEPS_PER_REVOLUTION / 32.0){
+              int s32 = (int)(degLeft * 32 / (360.00 / STEPS_PER_REVOLUTION));
+              stepLeft(STEP_PIN, s32, STEP_DIVIDE_32, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          }
 
           // update status vars
-          originPositionDeg -= deg;
-          originPositionMicrosteps32 = originPositionDeg * 32; 
+          currentPositionDeg -= (deg - degLeft);
+          currentPositionMicrosteps32 = currentPositionDeg * 32; 
           
           // confirm move with new status response
           getStatus();
@@ -260,12 +289,41 @@ void loop(){
           double deg = command.substring(1).toDouble();
 
           int full = (int)(deg * 1.0 / (360.00 / STEPS_PER_REVOLUTION));
-          SerialUSB.println(full);
-          stepRight(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          
+          if(full > 0){
+            stepRight(STEP_PIN, full, STEP_FULL, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          }
+
+          double degRight = deg - (full * (360.00 / STEPS_PER_REVOLUTION));
+          
+          if(degRight >= 360.00 / STEPS_PER_REVOLUTION / 2.0){
+              stepRight(STEP_PIN, 1, STEP_DIVIDE_2, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degRight = degRight - 360.00 / STEPS_PER_REVOLUTION / 2.0;
+          }
+          
+          if(degRight >= 360.00 / STEPS_PER_REVOLUTION / 4.0){
+              stepRight(STEP_PIN, 1, STEP_DIVIDE_4, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degRight = degRight - 360.00 / STEPS_PER_REVOLUTION / 4.0;
+          }
+          
+          if(degRight >= 360.00 / STEPS_PER_REVOLUTION / 8.0){
+              stepRight(STEP_PIN, 1, STEP_DIVIDE_8, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degRight = degRight - 360.00 / STEPS_PER_REVOLUTION / 8.0;
+          }
+          
+          if(degRight >= 360.00 / STEPS_PER_REVOLUTION / 16.0){
+              stepRight(STEP_PIN, 1, STEP_DIVIDE_16, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+              degRight = degRight - 360.00 / STEPS_PER_REVOLUTION / 16.0;
+          }
+          
+          if(degRight >= 360.00 / STEPS_PER_REVOLUTION / 32.0){
+              int s32 = (int)(degRight * 32 / (360.00 / STEPS_PER_REVOLUTION));
+              stepRight(STEP_PIN, s32, STEP_DIVIDE_32, DO_STEP_MICROSECONDS_DELAY, BETWEEN_STEP_MICROSECONDS_DELAY);
+          }
 
           // update status vars
-          originPositionDeg += deg;
-          originPositionMicrosteps32 = originPositionDeg * 32; 
+          currentPositionDeg += (deg - degRight);
+          currentPositionMicrosteps32 = currentPositionDeg * 32; 
           
           // confirm move with new status response
           getStatus();
