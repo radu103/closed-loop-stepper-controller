@@ -1,4 +1,6 @@
 // for SparkFun SAMD21 Mini Breakout board with Pololu DRV8825 stepper driver
+#include <SPI.h>
+
 bool DEBUG_MODE = true;
 
 const int CW = 0;
@@ -31,6 +33,10 @@ int motorTemp = 0;                             // motor sensor temp
 int dir = CW;
 int stepSize = STEP_FULL;
 
+// SPI pins
+const int dataReadyPin = 6;
+const int chipSelectPin = 7;
+
 // one time setup ops for program
 void setup() {
   
@@ -51,6 +57,11 @@ void setup() {
   // default baud rate
   SerialUSB.begin(DEFAULT_BAUD_RATE);
   while(!SerialUSB) ; // Wait for Serial monitor to open
+
+  // start the SPI library:
+  SPI.begin();
+  pinMode(dataReadyPin, INPUT);
+  pinMode(chipSelectPin, OUTPUT);
 }
 
 // set origin o current position
@@ -71,6 +82,24 @@ void getStatus(){
   stat = stat + DEBUG_MODE;
   stat = stat + "}";
   SerialUSB.println(stat);
+}
+
+void readSPIAngle(){
+
+  unsigned int result = 0;
+  byte inByte = 0; 
+
+  // read first byte
+  SPI.transfer(0);
+  inByte = SPI.transfer(0x00);
+  result = inByte;
+
+  // read second byte
+  result = result << 8;
+  inByte = SPI.transfer(0x00);
+  result = result | inByte; // combine the byte you just got with the previous one:
+  
+  SerialUSB.println(inByte);
 }
 
 void noDebug(){
@@ -230,6 +259,11 @@ void loop(){
 
       if(command.equalsIgnoreCase("NODEBUG")){
         noDebug();
+        getStatus();
+      }
+
+      if(command.equalsIgnoreCase("ANGLE")){
+        readSPIAngle();
         getStatus();
       }
 
